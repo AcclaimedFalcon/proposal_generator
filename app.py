@@ -7,14 +7,52 @@ from lxml import etree
 
 st.title("Solar Proposal Generator")
 
+# Basic input fields
 client_name = st.text_input("Client Name")
 site_location = st.text_input("Address")
 proposal_date = st.date_input("Proposal Date", value=datetime.date.today())
-aio_solar_kit_price = st.number_input("All-in-One Solar Installation Kit (3.3 kWp) ₹", min_value=0.0)
+
+# State and Wattage selection
+state = st.selectbox("Select State", ["UP", "UK"])
+wattage = st.selectbox("Select Wattage", ["3.3kWp", "4.4kWp", "5.5kWp"])
+
+# Extract numeric wattage for calculations
+wattage_numeric = float(wattage.replace("kWp", ""))
+
+# Price inputs
+aio_solar_kit_price = st.number_input("All-in-One Solar Installation Kit Price (₹)", min_value=0.0)
 total_price = st.number_input("Total Price (₹)", min_value=0.0)
 discounted_price = st.number_input("Discounted Price (₹)", min_value=0.0)
-net_effective_price = st.number_input("Net Effective Price (₹)", min_value=0.0)
+
+# Template upload
 template_upload = st.file_uploader("Upload Template DOCX", type=["docx"])
+
+# Subsidy and pricing lookup table
+SUBSIDY_TABLE = {
+    "UP": {
+        3.3: {"mnre_subsidy": 78000, "state_subsidy": 30000, "net_eff_price": 123000},
+        4.4: {"mnre_subsidy": 78000, "state_subsidy": 30000, "net_eff_price": 200000},
+        5.5: {"mnre_subsidy": 78000, "state_subsidy": 30000, "net_eff_price": 277000}
+    },
+    "UK": {
+        3.3: {"mnre_subsidy": 85800, "state_subsidy": 0, "net_eff_price": 145200},
+        4.4: {"mnre_subsidy": 85800, "state_subsidy": 0, "net_eff_price": 222200},
+        5.5: {"mnre_subsidy": 85800, "state_subsidy": 0, "net_eff_price": 299200}
+    }
+}
+
+# Get subsidy values based on selection
+selected_subsidies = SUBSIDY_TABLE[state][wattage_numeric]
+
+# Display calculated values
+st.subheader("Calculated Subsidies and Pricing")
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.metric("MNRE Subsidy", f"₹{selected_subsidies['mnre_subsidy']:,}")
+with col2:
+    st.metric("State Subsidy", f"₹{selected_subsidies['state_subsidy']:,}")
+with col3:
+    st.metric("Net Effective Price", f"₹{selected_subsidies['net_eff_price']:,}")
 
 # Comprehensive namespace map for DOCX XML
 NAMESPACES = {
@@ -38,7 +76,6 @@ def replace_in_text_nodes(tree, replacements):
             for placeholder, replacement in replacements.items():
                 if placeholder in node.text:
                     node.text = node.text.replace(placeholder, replacement)
-                    #print(f"Replaced '{placeholder}' in regular text: {original_text} -> {node.text}")
 
 def replace_in_textboxes(tree, replacements):
     """Replace placeholders in textboxes and shapes"""
@@ -58,7 +95,6 @@ def replace_in_textboxes(tree, replacements):
                 for placeholder, replacement in replacements.items():
                     if placeholder in node.text:
                         node.text = node.text.replace(placeholder, replacement)
-                        #print(f"Replaced '{placeholder}' in textbox: {original_text} -> {node.text}")
 
 def replace_in_drawing_objects(tree, replacements):
     """Handle text in drawing objects and shapes"""
@@ -77,7 +113,6 @@ def replace_in_drawing_objects(tree, replacements):
                 for placeholder, replacement in replacements.items():
                     if placeholder in node.text:
                         node.text = node.text.replace(placeholder, replacement)
-                        #print(f"Replaced '{placeholder}' in drawing object: {original_text} -> {node.text}")
 
 def handle_split_placeholders(tree, replacements):
     """Handle placeholders that might be split across multiple text nodes"""
@@ -115,17 +150,13 @@ def handle_split_placeholders(tree, replacements):
                                 update_node.text = replaced_text
                             else:
                                 update_node.text = ""
-                        
-                        #print(f"Replaced split placeholder '{placeholder}': {combined_text} -> {replaced_text}")
                         break
                     
                     if "}}" in next_text:
                         break
 
-def replace_placeholders_in_docx(input_path,  replacements):
+def replace_placeholders_in_docx(input_path, replacements):
     """Main function to replace placeholders in DOCX file"""
-    #print(f"Processing DOCX file: {input_path}")
-    
     with zipfile.ZipFile(input_path) as docx_zip:
         output_stream = BytesIO()
         
@@ -139,7 +170,6 @@ def replace_placeholders_in_docx(input_path,  replacements):
                     item.filename != "word/fontTable.xml"):  # Skip font table
                     
                     try:
-                        print(f"Processing: {item.filename}")
                         tree = etree.fromstring(data)
                         
                         # Apply all replacement strategies
@@ -156,16 +186,18 @@ def replace_placeholders_in_docx(input_path,  replacements):
                             standalone=False
                         )
                         
-                    except etree.XMLSyntaxError as e:
-                        print(f"Skipping non-XML file: {item.filename}")
+                    except etree.XMLSyntaxError:
+                        # Skip non-XML files
+                        pass
                     except Exception as e:
-                        print(f"Error processing {item.filename}: {e}")
+                        st.error(f"Error processing {item.filename}: {e}")
                 
                 modified_zip.writestr(item.filename, data)
         return output_stream
 
-
+# Generate proposal button
 if st.button("Generate Proposal") and template_upload:
+    # Create replacements dictionary with all placeholders
     REPLACEMENTS = {
         "{{client_name}}": client_name,
         "{{site_location}}": site_location,
@@ -173,15 +205,74 @@ if st.button("Generate Proposal") and template_upload:
         "{{aio_price}}": f"{aio_solar_kit_price:,.2f}",
         "{{total_price}}": f"{total_price:,.2f}",
         "{{disc_price}}": f"{discounted_price:,.2f}",
-        "{{nt_eff_price}}": f"{net_effective_price:,.2f}",
+        "{{mnre_subsidy}}": f"{selected_subsidies['mnre_subsidy']:,}",
+        "{{state_subsidy}}": f"{selected_subsidies['state_subsidy']:,}",
+        "{{nt_eff_price}}": f"{selected_subsidies['net_eff_price']:,}",
     }
 
-    # Replace text in all parts of the DOCX including textboxes
-    #patched_docx_stream = replace_text_in_textboxes(template_upload, replacements)
-    patched_docx_stream = replace_placeholders_in_docx(template_upload, REPLACEMENTS)
-    st.download_button(
-        label="Download Proposal",
-        data=patched_docx_stream.getvalue(),
-        file_name=f"Proposal_{client_name.replace(' ', '_')}.docx",
-        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    )
+    try:
+        # Process the document
+        with st.spinner("Generating proposal..."):
+            patched_docx_stream = replace_placeholders_in_docx(template_upload, REPLACEMENTS)
+        
+        # Provide download button
+        st.success("Proposal generated successfully!")
+        st.download_button(
+            label="Download Proposal",
+            data=patched_docx_stream.getvalue(),
+            file_name=f"Proposal_{client_name.replace(' ', '_')}_{state}_{wattage}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+        
+        # Show summary of replacements
+        st.subheader("Proposal Details Summary")
+        summary_data = {
+            "Field": ["Client Name", "Site Location", "Proposal Date", "State", "Wattage", 
+                     "MNRE Subsidy", "State Subsidy", "Net Effective Price", 
+                     "AIO Price", "Total Price", "Discounted Price"],
+            "Value": [client_name, site_location, proposal_date.strftime("%d-%m-%Y"), 
+                     state, wattage, f"₹{selected_subsidies['mnre_subsidy']:,}", 
+                     f"₹{selected_subsidies['state_subsidy']:,}", 
+                     f"₹{selected_subsidies['net_eff_price']:,}",
+                     f"₹{aio_solar_kit_price:,.2f}", f"₹{total_price:,.2f}", 
+                     f"₹{discounted_price:,.2f}"]
+        }
+        st.table(summary_data)
+        
+    except Exception as e:
+        st.error(f"Error generating proposal: {str(e)}")
+        st.error("Please check your template file and try again.")
+
+# Information section
+with st.expander("ℹ️ How to use"):
+    st.markdown("""
+    **Steps to generate a proposal:**
+    1. Fill in the client details (name, address, date)
+    2. Select the appropriate state (UP or UK)
+    3. Choose the solar system wattage (3.3kWp, 4.4kWp, or 5.5kWp)
+    4. Enter pricing information
+    5. Upload your DOCX template with placeholders
+    6. Click "Generate Proposal"
+    
+    **Supported placeholders in your template:**
+    - `{{client_name}}` - Client's name
+    - `{{site_location}}` - Installation address
+    - `{{proposal_date}}` - Proposal date
+    - `{{aio_price}}` - All-in-One kit price
+    - `{{total_price}}` - Total project price
+    - `{{disc_price}}` - Discounted price
+    - `{{mnre_subsidy}}` - MNRE subsidy amount (auto-calculated)
+    - `{{state_subsidy}}` - State subsidy amount (auto-calculated)
+    - `{{nt_eff_price}}` - Net effective price (auto-calculated)
+    
+    **Note:** The MNRE subsidy, state subsidy, and net effective price are automatically calculated based on your state and wattage selection.
+    """)
+
+# Debug section (optional - can be removed in production)
+if st.checkbox("Show Debug Info"):
+    st.subheader("Debug Information")
+    st.write("Selected State:", state)
+    st.write("Selected Wattage:", wattage_numeric)
+    st.write("Calculated Subsidies:", selected_subsidies)
+    if template_upload:
+        st.write("Template file uploaded:", template_upload.name)
