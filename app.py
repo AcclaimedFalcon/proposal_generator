@@ -20,9 +20,9 @@ wattage = st.selectbox("Select Wattage", ["3.3kWp", "4.4kWp", "5.5kWp"])
 wattage_numeric = float(wattage.replace("kWp", ""))
 
 # Price inputs
-aio_solar_kit_price = st.number_input("All-in-One Solar Installation Kit Price (₹)", min_value=0.0)
-total_price = st.number_input("Total Price (₹)", min_value=0.0)
-discounted_price = st.number_input("Discounted Price (₹)", min_value=0.0)
+#aio_solar_kit_price = st.number_input("All-in-One Solar Installation Kit Price (₹)", min_value=0.0)
+#total_price = st.number_input("Total Price (₹)", min_value=0.0)
+#discounted_price = st.number_input("Discounted Price (₹)", min_value=0.0)
 
 # Template upload
 template_upload = st.file_uploader("Upload Template DOCX", type=["docx"])
@@ -202,9 +202,6 @@ if st.button("Generate Proposal") and template_upload:
         "{{client_name}}": client_name,
         "{{site_location}}": site_location,
         "{{proposal_date}}": proposal_date.strftime("%d-%m-%Y"),
-        "{{aio_price}}": f"{aio_solar_kit_price:,.2f}",
-        "{{total_price}}": f"{total_price:,.2f}",
-        "{{disc_price}}": f"{discounted_price:,.2f}",
         "{{mnre_subsidy}}": f"{selected_subsidies['mnre_subsidy']:,}",
         "{{state_subsidy}}": f"{selected_subsidies['state_subsidy']:,}",
         "{{nt_eff_price}}": f"{selected_subsidies['net_eff_price']:,}",
@@ -228,14 +225,13 @@ if st.button("Generate Proposal") and template_upload:
         st.subheader("Proposal Details Summary")
         summary_data = {
             "Field": ["Client Name", "Site Location", "Proposal Date", "State", "Wattage", 
-                     "MNRE Subsidy", "State Subsidy", "Net Effective Price", 
-                     "AIO Price", "Total Price", "Discounted Price"],
+                     "MNRE Subsidy", "State Subsidy", "Net Effective Price" 
+                     ],
             "Value": [client_name, site_location, proposal_date.strftime("%d-%m-%Y"), 
                      state, wattage, f"₹{selected_subsidies['mnre_subsidy']:,}", 
                      f"₹{selected_subsidies['state_subsidy']:,}", 
-                     f"₹{selected_subsidies['net_eff_price']:,}",
-                     f"₹{aio_solar_kit_price:,.2f}", f"₹{total_price:,.2f}", 
-                     f"₹{discounted_price:,.2f}"]
+                     f"₹{selected_subsidies['net_eff_price']:,}"
+                    ]
         }
         st.table(summary_data)
         
